@@ -1,0 +1,52 @@
+# ── Python / Backend ──────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+.venv-1/
+env/
+ENV/
+
+# Environment secrets — NEVER push these
+backend/.env
+.env
+.env.*
+
+# Logs
+*.log
+log.txt
+
+# ── Node / Frontend ───────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+
+# Frontend env secrets — NEVER push
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+frontend/.env*.local
+
+# ── OS / Editor ───────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Misc ──────────────────────────────────────────
+*.sqlite
+*.db
