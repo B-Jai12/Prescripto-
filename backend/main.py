@@ -100,4 +100,7 @@ if __name__ == "__main__":
     print("\n" + "="*50)
     print(">>> LipiRx Engine v2.5 Online with Nurse AI <<<")
     print("="*50 + "\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    reload = os.environ.get("ENVIRONMENT", "dev").lower() == "dev"
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=reload)
+

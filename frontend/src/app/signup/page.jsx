@@ -5,7 +5,7 @@ import { useState } from 'react';
 import BorderGlow from '../../components/BorderGlow';
 import DecryptedText from '../../components/DecryptedText';
 import GridScan from '../../components/GridScan';
-import { supabase } from '@/lib/supabase';
+import { auth, db, createUserWithEmailAndPassword, doc, setDoc } from '@/lib/firebase';
 
 
 export default function SignupPage() {
@@ -29,27 +29,32 @@ export default function SignupPage() {
     setLoading(true);
     
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name,
-          }
-        }
-      });
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
 
-      if (signUpError) throw signUpError;
+      if (user) {
+        // Create user profile in Firestore
+        const docRef = doc(db, 'profiles', user.uid);
+        await setDoc(docRef, {
+          id: user.uid,
+          full_name: name,
+          email: email,
+          is_pro: false,
+          scan_count: 0,
+          updated_at: new Date().toISOString()
+        });
 
-      if (data.user) {
         localStorage.setItem("userEmail", email);
         localStorage.setItem("userName", name);
-        localStorage.setItem("currentUserId", data.user.id);
+        localStorage.setItem("currentUserId", user.uid);
         localStorage.setItem("is_setup_complete", "true");
         router.push('/app');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred during signup');
+      if (err.message && err.message.includes('Failed to fetch')) {
+        setError('Connection failed. If you use an adblocker or privacy shield, it may be blocking Firebase. You can also enable local offline mode by adding NEXT_PUBLIC_USE_MOCK_FIREBASE=true to .env.local and restarting the dev server.');
+      } else {
+        setError(err.message || 'An error occurred during signup');
+      }
     } finally {
       setLoading(false);
     }

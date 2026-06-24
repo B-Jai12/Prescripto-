@@ -17,7 +17,8 @@ export default function HistoryPage() {
       }
 
       try {
-        const response = await fetch(`http://localhost:8000/history/${email}`);
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiBaseUrl}/history/${email}`);
         const data = await response.json();
         setHistory(data.reverse()); // Show newest first
       } catch (error) {

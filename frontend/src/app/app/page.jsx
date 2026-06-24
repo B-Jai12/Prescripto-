@@ -14,7 +14,7 @@ import PatientSummaryCard from "@/components/PatientSummaryCard";
 import LipiChat from "@/components/LipiChat";
 import UploadCard from "@/components/UploadCard";
 import BrandBadge from '@/components/BrandBadge';
-import { supabase } from '@/lib/supabase';
+import { auth, signOut, onAuthStateChanged } from '@/lib/firebase';
 import jsPDF from 'jspdf';
 
 export default function AppMainPage() {
@@ -138,23 +138,20 @@ export default function AppMainPage() {
 
   useEffect(() => {
     // Security guard: wipe stale cached data if a different user logged in
-    const checkUserStatus = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const storedUserId = localStorage.getItem('currentUserId');
-          if (storedUserId && storedUserId !== user.id) {
-            localStorage.removeItem('userName');
-            localStorage.removeItem('userEmail');
-            localStorage.removeItem('is_setup_complete');
-          }
-          localStorage.setItem('currentUserId', user.id);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const storedUserId = localStorage.getItem('currentUserId');
+        if (storedUserId && storedUserId !== user.uid) {
+          localStorage.removeItem('userName');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('is_setup_complete');
         }
-      } catch (err) {
-        // Suppress errors when Supabase is paused or unreachable
+        localStorage.setItem('currentUserId', user.uid);
       }
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
     };
-    checkUserStatus();
   }, []);
 
   const handleUploadComplete = async (file) => {
@@ -169,7 +166,8 @@ export default function AppMainPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/parse-prescription?languages=en,te,hi', {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiBaseUrl}/parse-prescription?languages=en,te,hi`, {
         method: 'POST',
         body: formData,
       });
@@ -467,8 +465,8 @@ export default function AppMainPage() {
                     {/* Log Out */}
                     <div
                       onClick={async () => {
-                        // Sign out from Supabase
-                        await supabase.auth.signOut();
+                        // Sign out from Firebase
+                        await signOut(auth);
                         // Clear all user-specific localStorage to prevent data leaking to next user
                         localStorage.removeItem('userName');
                         localStorage.removeItem('userEmail');

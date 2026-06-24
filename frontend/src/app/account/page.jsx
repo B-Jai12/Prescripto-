@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ElectricBorder from "@/components/ElectricBorder";
-import { supabase } from "@/lib/supabase";
+import { auth, db, onAuthStateChanged, doc, getDoc, setDoc, updateDoc } from "@/lib/firebase";
 
 const translations = {
   en: {
@@ -128,15 +128,12 @@ export default function AccountPage() {
     setMounted(true);
     let isMounted = true;
 
-    const fetchUserData = async () => {
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const authUser = session?.user;
-
         if (authUser) {
           // ── SECURITY GUARD: Wipe stale data if a different user is now logged in ──
           const storedUserId = localStorage.getItem('currentUserId');
-          if (storedUserId && storedUserId !== authUser.id) {
+          if (storedUserId && storedUserId !== authUser.uid) {
             // Different user — clear all previous user's cached data
             localStorage.removeItem('isPro');
             localStorage.removeItem('userName');
@@ -144,18 +141,18 @@ export default function AccountPage() {
             localStorage.removeItem('is_setup_complete');
           }
           // Always store the current user's ID
-          localStorage.setItem('currentUserId', authUser.id);
+          localStorage.setItem('currentUserId', authUser.uid);
 
-          // ── Fetch profile from Supabase (single source of truth) ──
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
+          // ── Fetch profile from Firestore (single source of truth) ──
+          const docRef = doc(db, 'profiles', authUser.uid);
+          const docSnap = await getDoc(docRef);
+          let profile = null;
+
+          if (docSnap.exists()) {
+            profile = docSnap.data();
+          }
 
           if (isMounted) {
-            // For ALL users (Google or manual): only show name if they explicitly set it
-            // Do NOT auto-fill from Google/Apple OAuth metadata
             let finalName = 'User';
             if (profile?.full_name && profile.full_name.toLowerCase() !== 'user') {
               finalName = profile.full_name;
@@ -165,46 +162,39 @@ export default function AccountPage() {
             setFullName(finalName);
 
             if (profile) {
-              // Only update profile-related local state
               if (finalName !== 'User') {
                 localStorage.setItem('is_setup_complete', 'true');
               }
             } else {
-              // Brand new user — create blank profile row
-              await supabase.from('profiles').upsert({
-                id: authUser.id,
+              // Brand new user — create blank profile doc
+              const newProfile = {
+                id: authUser.uid,
                 full_name: 'User',
                 email: authUser.email || '',
                 is_pro: false,
                 scan_count: 0,
                 updated_at: new Date().toISOString()
-              });
+              };
+              await setDoc(docRef, newProfile);
               localStorage.setItem('isPro', 'false');
             }
 
             setLoadingAuth(false);
           }
         } else {
-          // Retry once if session is slow
-          setTimeout(async () => {
-            const { data: { session: retry } } = await supabase.auth.getSession();
-            if (isMounted) {
-              if (retry?.user) {
-                setUser({ name: 'User', email: retry.user.email || '', initials: '👤' });
-                setLoadingAuth(false);
-              } else {
-                router.push('/login');
-              }
-            }
-          }, 800);
+          if (isMounted) {
+            router.push('/login');
+          }
         }
       } catch (e) {
         if (isMounted) setLoadingAuth(false);
       }
-    };
+    });
 
-    fetchUserData();
-    return () => { isMounted = false; };
+    return () => { 
+      isMounted = false; 
+      if (unsubscribe) unsubscribe();
+    };
   }, [router]);
 
   const handleLangChange = (id) => {
@@ -220,8 +210,7 @@ export default function AccountPage() {
   };
 
   const handleUpdateProfile = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const authUser = session?.user;
+    const authUser = auth.currentUser;
     
     if (!authUser) {
       alert("Session expired. Please log in again to save your changes.");
@@ -236,26 +225,24 @@ export default function AccountPage() {
 
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ 
+    try {
+      const docRef = doc(db, 'profiles', authUser.uid);
+      await updateDoc(docRef, {
         full_name: fullName.trim(),
         updated_at: new Date().toISOString()
-      })
-      .eq('id', authUser.id);
+      });
 
-    setIsSaving(false);
-
-    if (!error) {
       setUser(prev => ({ ...prev, name: fullName.trim() }));
       setFullName(fullName.trim());
       localStorage.setItem("userName", fullName.trim());
       localStorage.setItem("is_setup_complete", "true");
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    } else {
+    } catch (error) {
       console.error('Profile save error:', error);
-      alert("Failed to save: " + (error.message || "Unknown error. Check Supabase RLS policies."));
+      alert("Failed to save: " + (error.message || "Unknown error. Check Firebase configuration."));
+    } finally {
+      setIsSaving(false);
     }
   };
 

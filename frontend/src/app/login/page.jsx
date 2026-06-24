@@ -5,7 +5,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import BorderGlow from '../../components/BorderGlow';
 import DecryptedText from '../../components/DecryptedText';
-import { supabase } from '@/lib/supabase';
+import { auth, db, signInWithEmailAndPassword, doc, getDoc } from '@/lib/firebase';
 
 const GridScan = dynamic(() => import('../../components/GridScan').then(m => m.GridScan), { ssr: false });
 
@@ -23,26 +23,19 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
 
-      if (signInError) throw signInError;
-
-      if (data.user) {
+      if (user) {
         localStorage.setItem("userEmail", email);
-        localStorage.setItem("currentUserId", data.user.id);
+        localStorage.setItem("currentUserId", user.uid);
         
-        // Fetch profile to pre-populate user name in local storage
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', data.user.id)
-          .single();
+        // Fetch profile from Firestore
+        const docRef = doc(db, 'profiles', user.uid);
+        const docSnap = await getDoc(docRef);
           
-        if (profile) {
-          if (profile.full_name && profile.full_name.toLowerCase() !== 'user') {
+        if (docSnap.exists()) {
+          const profile = docSnap.data();
+          if (profile && profile.full_name && profile.full_name.toLowerCase() !== 'user') {
             localStorage.setItem('userName', profile.full_name);
             localStorage.setItem('is_setup_complete', 'true');
           }
@@ -51,7 +44,11 @@ export default function LoginPage() {
         router.push('/app');
       }
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      if (err.message && err.message.includes('Failed to fetch')) {
+        setError('Connection failed. If you use an adblocker or privacy shield, it may be blocking Firebase. You can also enable local offline mode by adding NEXT_PUBLIC_USE_MOCK_FIREBASE=true to .env.local and restarting the dev server.');
+      } else {
+        setError(err.message || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
