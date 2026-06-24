@@ -62,7 +62,7 @@ async def parse_prescription(file: UploadFile = File(...), languages: str = Quer
       Example: "en" (English only, FASTEST - ~30 seconds vs 60+ seconds)
       Example: "en,hi" (English + Hindi only)
     """
-    if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+    if file.content_type not in ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]:
         raise HTTPException(status_code=400, detail="Invalid file type.")
     try:
         print(f"[ANALYSIS START] Languages requested: {languages}")

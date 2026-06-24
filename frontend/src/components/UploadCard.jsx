@@ -9,8 +9,9 @@ export default function UploadCard({ onFileSelect, selectedFile, onClear, isAnal
 
   const handleFile = (file) => {
     if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      alert("Please upload a JPG or PNG image.");
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    if (!allowed.includes(file.type)) {
+      alert("Please upload a JPG, PNG, WEBP, or HEIC image.");
       return;
     }
     onFileSelect(file);
@@ -91,7 +92,7 @@ export default function UploadCard({ onFileSelect, selectedFile, onClear, isAnal
                 Drop your prescription here
               </p>
               <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.4)' }}>
-                or <span style={{ color: '#FF9FFC', textDecoration: 'underline' }}>browse files</span> · JPG, PNG supported
+                or <span style={{ color: '#FF9FFC', textDecoration: 'underline' }}>browse files</span> · JPG, PNG, WEBP, HEIC supported
               </p>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
@@ -143,7 +144,7 @@ export default function UploadCard({ onFileSelect, selectedFile, onClear, isAnal
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
           className="hidden"
           onChange={(e) => handleFile(e.target.files[0])}
         />
