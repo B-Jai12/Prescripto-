@@ -243,7 +243,7 @@ export default function AppMainPage() {
       setView('result');
     } catch (err) {
       console.error('Analysis failed:', err);
-      alert(`Analysis failed: ${err.message}\n\nPlease make sure the backend server is running on port 8000.`);
+      alert(`Analysis failed: ${err.message}\n\nThe AI analysis server may be starting up (this can take up to 60 seconds on the first request). Please wait a moment and try again.`);
     } finally {
       setLoading(false);
     }
