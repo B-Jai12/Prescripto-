@@ -5,7 +5,13 @@ pillow
 httpx
 groq
 python-dotenv
-streamlit
 requests
 easyocr
 deep-translator
+google-genai
+cryptography
+numpy
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
+

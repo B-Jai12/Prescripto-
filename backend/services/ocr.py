@@ -2,12 +2,8 @@ import io
 from PIL import Image, ImageEnhance
 import easyocr
 import numpy as np
-
-import io
-from PIL import Image, ImageEnhance
-import easyocr
-import numpy as np
 import torch
+
 
 # Initialize the EasyOCR reader (this will download models on first run if not present)
 # We specify 'en' for English.
