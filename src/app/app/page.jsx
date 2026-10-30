@@ -370,7 +370,7 @@ export default function AppMainPage() {
       }
     } catch (err) {
       console.error('Analysis failed:', err);
-      alert(`Analysis failed: ${err.message}\n\nThe AI analysis server may be starting up (this can take up to 60 seconds on the first request). Please wait a moment and try again.`);
+      alert(`Analysis failed: ${err.message}\n\nPlease wait a few seconds and try again.`);
     } finally {
       setLoading(false);
     }

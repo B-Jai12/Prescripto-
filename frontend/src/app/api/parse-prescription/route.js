@@ -92,60 +92,81 @@ export async function POST(request) {
     const base64Data = buffer.toString('base64');
     const mimeType = file.type || 'image/png';
 
-    // Fast model fallback chain (prioritize lightweight & fast vision models)
-    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash', 'gemini-flash-latest'];
+    // High-availability model chain with automatic transient 503/429 retry
+    const models = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
     let lastError = null;
     let extractedData = null;
 
-    for (const model of models) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 18000);
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
-            contents: [{
-              role: 'user',
-              parts: [
-                { text: `Read this prescription and extract all data. Ensure patient instructions in English, Hindi, and Telugu for languages requested: ${languages}.` },
-                { inline_data: { mime_type: mimeType, data: base64Data } }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              response_mime_type: "application/json",
-              response_schema: PRESCRIPTION_SCHEMA
-            }
-          })
-        });
-
-        clearTimeout(timer);
-
-        if (response.ok) {
-          const geminiRes = await response.json();
-          const candidate = geminiRes.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (candidate) {
-            extractedData = JSON.parse(candidate);
-            break;
-          }
-        } else {
-          const errText = await response.text();
-          lastError = new Error(`Model ${model} error (${response.status}): ${errText}`);
-          console.warn(`[Vercel Serverless] ${model} failed, trying next model:`, errText.slice(0, 150));
-        }
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Vercel Serverless] ${model} exception or timeout:`, err.message);
+    const requestBody = JSON.stringify({
+      system_instruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: `Read this doctor prescription and extract all data. Ensure patient instructions in English, Hindi, and Telugu for languages requested: ${languages}.` },
+          { inline_data: { mime_type: mimeType, data: base64Data } }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        response_mime_type: "application/json",
+        response_schema: PRESCRIPTION_SCHEMA
       }
+    });
+
+    for (const model of models) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 20000);
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: requestBody
+          });
+
+          clearTimeout(timer);
+
+          if (response.ok) {
+            const geminiRes = await response.json();
+            const candidate = geminiRes.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (candidate) {
+              extractedData = JSON.parse(candidate);
+              break;
+            }
+          }
+
+          if (response.status === 503 || response.status === 429) {
+            console.warn(`[Vercel Serverless] ${model} returned ${response.status} (attempt ${attempt}/2). Waiting 1.2s...`);
+            if (attempt === 1) {
+              await new Promise((r) => setTimeout(r, 1200));
+              continue;
+            }
+          }
+
+          const errText = await response.text();
+          lastError = new Error(`Model ${model} error (${response.status})`);
+          break; // move to next model in chain
+        } catch (err) {
+          lastError = err;
+          console.warn(`[Vercel Serverless] ${model} attempt ${attempt} error:`, err.message);
+          if (attempt === 1) {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+          break;
+        }
+      }
+      if (extractedData) break;
     }
 
     if (!extractedData) {
-      throw lastError || new Error('All Gemini models were unable to process the prescription.');
+      return NextResponse.json(
+        { detail: 'AI analysis service is temporarily busy. Please wait a moment and try uploading again.' },
+        { status: 503 }
+      );
     }
 
     // Ensure fallback wellness advice if empty
