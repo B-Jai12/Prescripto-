@@ -92,17 +92,21 @@ export async function POST(request) {
     const base64Data = buffer.toString('base64');
     const mimeType = file.type || 'image/png';
 
-    // Model fallback chain
-    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'];
+    // Fast model fallback chain (prioritize lightweight & fast vision models)
+    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-1.5-flash', 'gemini-flash-latest'];
     let lastError = null;
     let extractedData = null;
 
     for (const model of models) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 18000);
+
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             system_instruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
             contents: [{
@@ -120,6 +124,8 @@ export async function POST(request) {
           })
         });
 
+        clearTimeout(timer);
+
         if (response.ok) {
           const geminiRes = await response.json();
           const candidate = geminiRes.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -134,7 +140,7 @@ export async function POST(request) {
         }
       } catch (err) {
         lastError = err;
-        console.warn(`[Vercel Serverless] ${model} exception:`, err.message);
+        console.warn(`[Vercel Serverless] ${model} exception or timeout:`, err.message);
       }
     }
 
