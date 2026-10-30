@@ -15,6 +15,7 @@ import LipiChat from "@/components/LipiChat";
 import UploadCard from "@/components/UploadCard";
 import BrandBadge from '@/components/BrandBadge';
 import { auth, signOut, onAuthStateChanged } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import jsPDF from 'jspdf';
 
 const ScannerLine = () => (
@@ -303,6 +304,15 @@ export default function AppMainPage() {
         const existing = existingRaw ? JSON.parse(existingRaw) : [];
         existing.unshift(historyItem);
         localStorage.setItem('lipirx_prescription_history', JSON.stringify(existing.slice(0, 20)));
+
+        // Also persist to Supabase if table exists
+        supabase.from('prescriptions').insert({
+          file_name: file?.name || 'Prescription',
+          patient_name: mapped.patient.name,
+          medicines_count: meds.length,
+          data: backendData,
+          created_at: new Date().toISOString()
+        }).then(() => {}).catch(() => {});
       } catch (historyErr) {
         console.warn('Could not cache prescription history:', historyErr);
       }

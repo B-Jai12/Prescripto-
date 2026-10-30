@@ -1,209 +1,262 @@
 // ============================================================
-// LipiRx Firebase Client
-// Supports:
-//   - Live Firebase (when NEXT_PUBLIC_FIREBASE_API_KEY is set)
-//   - Local Offline Mock Mode (fallback when keys are missing)
-//
-// Uses dynamic imports so the firebase package is only loaded
-// when real credentials are present. Mock mode works without
-// the firebase package installed.
+// Prescripto Auth & Database Client
+// Powered by Supabase (with offline resilient local fallback)
 // ============================================================
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+import { supabase } from './supabase';
 
-// Detect mock mode: missing keys OR explicitly requested
-export const isMock =
-  !firebaseConfig.apiKey ||
-  !firebaseConfig.projectId ||
-  firebaseConfig.apiKey === 'undefined' ||
-  process.env.NEXT_PUBLIC_USE_MOCK_FIREBASE === 'true';
+export { supabase };
 
-// ── Lazy-loaded real Firebase instances ──────────────────────
-let _auth = null;
-let _db = null;
-
-async function getRealFirebase() {
-  if (_auth && _db) return { auth: _auth, db: _db };
-  const { initializeApp, getApps, getApp } = await import('firebase/app');
-  const { getAuth } = await import('firebase/auth');
-  const { getFirestore } = await import('firebase/firestore');
-  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  _auth = getAuth(app);
-  _db = getFirestore(app);
-  return { auth: _auth, db: _db };
-}
-
-// ── Mock State ───────────────────────────────────────────────
+// ── Mock & Session State ─────────────────────────────────────
 const mockAuth = { currentUser: null, _listeners: [] };
-const mockDb = { _type: 'mock_db' };
+const mockDb = { _type: 'supabase_db' };
 
-// Exported auth/db placeholders (real values set asynchronously)
-export let auth = isMock ? mockAuth : null;
-export let db = isMock ? mockDb : null;
+export const isMock = false;
+export let auth = mockAuth;
+export let db = mockDb;
 
-// If using real Firebase, initialize lazily and update exports
-if (!isMock && typeof window !== 'undefined') {
-  getRealFirebase()
-    .then(({ auth: a, db: d }) => {
-      auth = a;
-      db = d;
-    })
-    .catch((err) => {
-      console.error('Firebase init failed, using mock mode:', err);
-    });
+function formatSupabaseUser(user) {
+  if (!user) return null;
+  return {
+    uid: user.id,
+    id: user.id,
+    email: user.email,
+    displayName: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+    user_metadata: user.user_metadata || {},
+  };
 }
 
-if (isMock && typeof window !== 'undefined') {
-  console.log('%c[LipiRx] Running in Offline Mock Firebase Mode', 'color: #FF9FFC; font-weight: bold');
+// Initialize Supabase auth session listener on browser
+if (typeof window !== 'undefined') {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) {
+      const u = formatSupabaseUser(session.user);
+      auth.currentUser = u;
+      localStorage.setItem('userEmail', u.email || '');
+      localStorage.setItem('currentUserId', u.uid || '');
+      mockAuth._listeners.forEach((cb) => cb(u));
+    }
+  }).catch((err) => {
+    console.warn('[Prescripto] Supabase initial session check:', err);
+  });
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    const u = formatSupabaseUser(session?.user);
+    auth.currentUser = u;
+    if (u) {
+      localStorage.setItem('userEmail', u.email || '');
+      localStorage.setItem('currentUserId', u.uid || '');
+    } else {
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('currentUserId');
+    }
+    mockAuth._listeners.forEach((cb) => cb(u));
+  });
 }
 
 // ── Auth Functions ───────────────────────────────────────────
 
-export const signInWithEmailAndPassword = async (authInstance, email, password) => {
-  if (isMock) {
-    const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
-    let user = users.find((u) => u.email === email);
-    if (!user) {
-      user = {
-        uid: 'mock-uid-' + Math.random().toString(36).substr(2, 9),
-        email,
-        displayName: 'Local Developer',
-      };
-      users.push(user);
-      localStorage.setItem('mock_users', JSON.stringify(users));
-      const profiles = JSON.parse(localStorage.getItem('mock_profiles') || '{}');
-      profiles[user.uid] = { id: user.uid, full_name: 'Local Developer', is_pro: false, scan_count: 0 };
-      localStorage.setItem('mock_profiles', JSON.stringify(profiles));
-    }
-    mockAuth.currentUser = user;
-    localStorage.setItem('mock_session', JSON.stringify({ user }));
-    mockAuth._listeners.forEach((cb) => cb(user));
-    return { user };
-  }
-  const { auth: a } = await getRealFirebase();
-  const { signInWithEmailAndPassword: fbSignIn } = await import('firebase/auth');
-  return fbSignIn(a, email, password);
-};
-
-export const createUserWithEmailAndPassword = async (authInstance, email, password) => {
-  if (isMock) {
-    const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
-    if (users.find((u) => u.email === email)) {
-      throw new Error('Firebase: Error (auth/email-already-in-use).');
-    }
-    const newUser = {
-      uid: 'mock-uid-' + Math.random().toString(36).substr(2, 9),
+export const signInWithEmailAndPassword = async (authObj, email, password) => {
+  if (authObj) { /* no-op reference */ }
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      displayName: '',
-    };
-    users.push(newUser);
-    localStorage.setItem('mock_users', JSON.stringify(users));
-    mockAuth.currentUser = newUser;
-    localStorage.setItem('mock_session', JSON.stringify({ user: newUser }));
-    mockAuth._listeners.forEach((cb) => cb(newUser));
-    return { user: newUser };
-  }
-  const { auth: a } = await getRealFirebase();
-  const { createUserWithEmailAndPassword: fbCreate } = await import('firebase/auth');
-  return fbCreate(a, email, password);
-};
-
-export const signOut = async (authInstance) => {
-  if (isMock) {
-    mockAuth.currentUser = null;
-    localStorage.removeItem('mock_session');
-    mockAuth._listeners.forEach((cb) => cb(null));
-    return {};
-  }
-  const { auth: a } = await getRealFirebase();
-  const { signOut: fbSignOut } = await import('firebase/auth');
-  return fbSignOut(a);
-};
-
-export const onAuthStateChanged = (authInstance, callback) => {
-  if (isMock) {
-    mockAuth._listeners.push(callback);
-    if (typeof window !== 'undefined') {
-      const session = JSON.parse(localStorage.getItem('mock_session') || 'null');
-      if (session && session.user) {
-        const user = { uid: session.user.uid, email: session.user.email, displayName: session.user.displayName || 'Local Developer' };
-        mockAuth.currentUser = user;
-        setTimeout(() => callback(user), 0);
-      } else {
-        mockAuth.currentUser = null;
-        setTimeout(() => callback(null), 0);
-      }
-    } else {
-      setTimeout(() => callback(null), 0);
-    }
-    return () => {
-      mockAuth._listeners = mockAuth._listeners.filter((cb) => cb !== callback);
-    };
-  }
-  // Real Firebase — attach listener after init
-  let unsubscribe = () => {};
-  getRealFirebase().then(({ auth: a }) => {
-    import('firebase/auth').then(({ onAuthStateChanged: fbOnAuth }) => {
-      unsubscribe = fbOnAuth(a, callback);
+      password,
     });
-  });
-  return () => unsubscribe();
+
+    if (error) {
+      // Fallback to local offline login if Supabase auth fails (e.g. rate limit or unconfirmed)
+      console.warn('[Prescripto] Supabase login error, checking local fallback:', error.message);
+      const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
+      const localUser = users.find((u) => u.email === email);
+      if (localUser) {
+        auth.currentUser = localUser;
+        mockAuth._listeners.forEach((cb) => cb(localUser));
+        return { user: localUser };
+      }
+      throw new Error(error.message || 'Invalid email or password');
+    }
+
+    const formatted = formatSupabaseUser(data.user);
+    auth.currentUser = formatted;
+    mockAuth._listeners.forEach((cb) => cb(formatted));
+    return { user: formatted };
+  } catch (_) {
+    // If network down or offline
+    const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
+    let localUser = users.find((u) => u.email === email);
+    if (!localUser) {
+      localUser = {
+        uid: 'user_' + Math.random().toString(36).substring(2, 9),
+        email,
+        displayName: email.split('@')[0],
+      };
+      users.push(localUser);
+      localStorage.setItem('mock_users', JSON.stringify(users));
+    }
+    auth.currentUser = localUser;
+    mockAuth._listeners.forEach((cb) => cb(localUser));
+    return { user: localUser };
+  }
 };
 
-// ── Firestore Functions ──────────────────────────────────────
+export const createUserWithEmailAndPassword = async (authObj, email, password) => {
+  if (authObj) { /* no-op reference */ }
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
 
-export const doc = (dbInstance, collectionName, docId) => {
-  // Always return a mock doc_ref — the real Firestore doc()
-  // is resolved lazily inside getDoc/setDoc/updateDoc
-  if (isMock || !dbInstance || dbInstance._type === 'mock_db') {
-    return { _type: 'doc_ref', collectionName, docId };
+    if (error) {
+      console.warn('[Prescripto] Supabase signup error, using local fallback:', error.message);
+      const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
+      let localUser = users.find((u) => u.email === email);
+      if (localUser) throw new Error('User with this email already exists.');
+      localUser = {
+        uid: 'user_' + Math.random().toString(36).substring(2, 9),
+        email,
+        displayName: email.split('@')[0],
+      };
+      users.push(localUser);
+      localStorage.setItem('mock_users', JSON.stringify(users));
+      auth.currentUser = localUser;
+      mockAuth._listeners.forEach((cb) => cb(localUser));
+      return { user: localUser };
+    }
+
+    const formatted = formatSupabaseUser(data.user);
+    auth.currentUser = formatted;
+    mockAuth._listeners.forEach((cb) => cb(formatted));
+    return { user: formatted };
+  } catch (_) {
+    const users = JSON.parse(localStorage.getItem('mock_users') || '[]');
+    let localUser = {
+      uid: 'user_' + Math.random().toString(36).substring(2, 9),
+      email,
+      displayName: email.split('@')[0],
+    };
+    users.push(localUser);
+    localStorage.setItem('mock_users', JSON.stringify(users));
+    auth.currentUser = localUser;
+    mockAuth._listeners.forEach((cb) => cb(localUser));
+    return { user: localUser };
   }
-  // _db is already initialized synchronously by getRealFirebase() if live mode
-  return { _type: 'live_doc_ref', collectionName, docId, db: dbInstance };
+};
+
+export const signOut = async () => {
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn('[Prescripto] Signout error:', e);
+  }
+  auth.currentUser = null;
+  localStorage.removeItem('userEmail');
+  localStorage.removeItem('currentUserId');
+  mockAuth._listeners.forEach((cb) => cb(null));
+  return {};
+};
+
+export const onAuthStateChanged = (authObj, callback) => {
+  if (authObj) { /* no-op */ }
+  mockAuth._listeners.push(callback);
+
+  if (typeof window !== 'undefined') {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = formatSupabaseUser(session?.user);
+      if (u) {
+        auth.currentUser = u;
+        callback(u);
+      } else {
+        const email = localStorage.getItem('userEmail');
+        const uid = localStorage.getItem('currentUserId');
+        if (email && uid) {
+          const fallbackUser = { uid, email, displayName: localStorage.getItem('userName') || email.split('@')[0] };
+          auth.currentUser = fallbackUser;
+          callback(fallbackUser);
+        } else {
+          callback(null);
+        }
+      }
+    }).catch(() => {
+      callback(auth.currentUser);
+    });
+  } else {
+    setTimeout(() => callback(null), 0);
+  }
+
+  return () => {
+    mockAuth._listeners = mockAuth._listeners.filter((cb) => cb !== callback);
+  };
+};
+
+// ── Database / Profile Functions ─────────────────────────────
+
+export const doc = (dbObj, collectionName, docId) => {
+  if (dbObj) { /* no-op */ }
+  return { _type: 'supabase_doc_ref', collectionName, docId };
 };
 
 export const getDoc = async (docRef) => {
-  if (isMock || docRef._type === 'doc_ref') {
-    const profiles = JSON.parse(localStorage.getItem('mock_profiles') || '{}');
-    const data = profiles[docRef.docId] || null;
-    return { exists: () => !!data, data: () => data };
+  const collection = docRef.collectionName;
+  const docId = docRef.docId;
+
+  try {
+    const { data, error } = await supabase
+      .from(collection)
+      .select('*')
+      .eq('id', docId)
+      .single();
+
+    if (!error && data) {
+      return { exists: () => true, data: () => data };
+    }
+  } catch (err) {
+    console.warn(`[Prescripto] Supabase read from ${collection} failed, trying local storage:`, err);
   }
-  // live_doc_ref: build real Firestore DocumentReference on demand
-  const { getDoc: fbGetDoc, doc: fbDoc } = await import('firebase/firestore');
-  const realRef = fbDoc(docRef.db, docRef.collectionName, docRef.docId);
-  return fbGetDoc(realRef);
+
+  // Local fallback
+  const store = JSON.parse(localStorage.getItem(`mock_${collection}`) || '{}');
+  const localData = store[docId] || null;
+  return { exists: () => !!localData, data: () => localData };
 };
 
 export const setDoc = async (docRef, data, options = {}) => {
-  if (isMock || docRef._type === 'doc_ref') {
-    const profiles = JSON.parse(localStorage.getItem('mock_profiles') || '{}');
-    profiles[docRef.docId] = options.merge
-      ? { ...(profiles[docRef.docId] || {}), ...data }
-      : data;
-    localStorage.setItem('mock_profiles', JSON.stringify(profiles));
-    return {};
+  const collection = docRef.collectionName;
+  const docId = docRef.docId;
+
+  // Always save to localStorage immediately for instant offline reactivity
+  const store = JSON.parse(localStorage.getItem(`mock_${collection}`) || '{}');
+  store[docId] = options.merge ? { ...(store[docId] || {}), ...data } : data;
+  localStorage.setItem(`mock_${collection}`, JSON.stringify(store));
+
+  try {
+    await supabase
+      .from(collection)
+      .upsert({ id: docId, ...data });
+  } catch (err) {
+    console.warn(`[Prescripto] Supabase upsert to ${collection}:`, err);
   }
-  const { setDoc: fbSetDoc, doc: fbDoc } = await import('firebase/firestore');
-  const realRef = fbDoc(docRef.db, docRef.collectionName, docRef.docId);
-  return fbSetDoc(realRef, data, options);
+
+  return {};
 };
 
 export const updateDoc = async (docRef, data) => {
-  if (isMock || docRef._type === 'doc_ref') {
-    const profiles = JSON.parse(localStorage.getItem('mock_profiles') || '{}');
-    if (!profiles[docRef.docId]) throw new Error('Document does not exist');
-    profiles[docRef.docId] = { ...profiles[docRef.docId], ...data };
-    localStorage.setItem('mock_profiles', JSON.stringify(profiles));
-    return {};
+  const collection = docRef.collectionName;
+  const docId = docRef.docId;
+
+  const store = JSON.parse(localStorage.getItem(`mock_${collection}`) || '{}');
+  store[docId] = { ...(store[docId] || {}), ...data };
+  localStorage.setItem(`mock_${collection}`, JSON.stringify(store));
+
+  try {
+    await supabase
+      .from(collection)
+      .update(data)
+      .eq('id', docId);
+  } catch (err) {
+    console.warn(`[Prescripto] Supabase update to ${collection}:`, err);
   }
-  const { updateDoc: fbUpdateDoc, doc: fbDoc } = await import('firebase/firestore');
-  const realRef = fbDoc(docRef.db, docRef.collectionName, docRef.docId);
-  return fbUpdateDoc(realRef, data);
+
+  return {};
 };

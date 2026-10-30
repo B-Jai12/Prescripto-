@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Clock, ChevronRight, FileText, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import PatientSummaryCard from "@/components/PatientSummaryCard";
+import { supabase } from "@/lib/supabase";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState([]);
@@ -26,11 +27,35 @@ export default function HistoryPage() {
         console.warn("Could not read local prescription history:", e);
       }
 
-      // 2. Fallback to backend history endpoint if available
+      // 2. Query Supabase prescriptions table if available
+      try {
+        const { data: supaRx, error: supaErr } = await supabase
+          .from('prescriptions')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!supaErr && Array.isArray(supaRx) && supaRx.length > 0) {
+          const mapped = supaRx.map((item) => ({
+            id: item.id || 'rx_' + Date.now(),
+            timestamp: item.created_at || new Date().toISOString(),
+            fileName: item.file_name || 'Prescription',
+            data: item.data || item,
+            patientName: item.patient_name || item.data?.patient_details?.name || 'Patient',
+            medicinesCount: item.medicines_count || item.data?.medicines?.length || 0,
+          }));
+          setHistory(mapped);
+          setLoading(false);
+          return;
+        }
+      } catch (supaErr) {
+        console.warn("Supabase prescription fetch:", supaErr);
+      }
+
+      // 3. Fallback to backend history endpoint if available
       const email = localStorage.getItem("userEmail");
-      if (email) {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (email && apiBaseUrl) {
         try {
-          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
           const response = await fetch(`${apiBaseUrl}/history/${encodeURIComponent(email)}`);
           if (response.ok) {
             const data = await response.json();
