@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import BorderGlow from '../../components/BorderGlow';
 import DecryptedText from '../../components/DecryptedText';
@@ -73,7 +74,7 @@ export default function LoginPage() {
       </div>
 
       {/* Back to home */}
-      <a href="/" style={{
+      <Link href="/" style={{
         position: 'absolute', top: 32, left: 32,
         display: 'flex', alignItems: 'center', gap: 8,
         fontSize: 14, color: 'rgba(255,255,255,0.45)',
@@ -83,7 +84,7 @@ export default function LoginPage() {
         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
       >
         <span style={{ fontSize: 18, lineHeight: 1 }}>←</span> Back
-      </a>
+      </Link>
 
       {/* Card */}
       <motion.div
@@ -98,13 +99,13 @@ export default function LoginPage() {
           animated={true} colors={['#FF9FFC', '#c084fc', '#38bdf8']}
         >
           <div style={{ padding: '48px 40px', backdropFilter: 'blur(16px) saturate(180%)' }}>
-            <a href="/" style={{
+            <Link href="/" style={{
               display: 'inline-flex', alignItems: 'center', gap: 12,
               fontSize: 16, fontWeight: 600, color: '#ffffff',
               textDecoration: 'none', marginBottom: 40,
             }}>
               <DecryptedText text="LipiRx" speed={100} maxIterations={20} characters="ABCD1234!?" animateOn="view" revealDirection="center" />
-            </a>
+            </Link>
 
             <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: '#ffffff', marginBottom: 12 }}>
               <DecryptedText text="Login" animateOn="view" speed={60} />

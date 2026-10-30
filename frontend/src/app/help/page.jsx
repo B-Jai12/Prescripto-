@@ -236,7 +236,7 @@ export default function HelpCenterPage() {
             LipiRx
           </div>
           <p style={{ fontSize: 14, marginBottom: 32 }}>
-            If you can't find the answer to your question, please contact us at <span style={{ color: '#FF9FFC', fontWeight: 700 }}>adepumanojkumar96@gmail.com</span>
+            If you can&apos;t find the answer to your question, please contact us at <span style={{ color: '#FF9FFC', fontWeight: 700 }}>adepumanojkumar96@gmail.com</span>
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 32 }}>
             {[

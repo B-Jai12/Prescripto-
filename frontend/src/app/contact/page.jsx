@@ -56,11 +56,11 @@ export default function ContactPage() {
               transition={{ duration: 0.6 }}
             >
               <h1 style={{ fontSize: 48, fontWeight: 900, letterSpacing: '-0.04em', marginBottom: 24, lineHeight: 1 }}>
-                Let's talk about <br />
+                Let&apos;s talk about <br />
                 <span style={{ color: '#FF9FFC' }}>your healthcare.</span>
               </h1>
               <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: 48 }}>
-                Whether you're a patient with a query or a hospital looking to integrate LipiRx, our specialized clinical team is ready to assist you.
+                Whether you&apos;re a patient with a query or a hospital looking to integrate LipiRx, our specialized clinical team is ready to assist you.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>

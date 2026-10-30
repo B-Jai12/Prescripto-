@@ -116,7 +116,6 @@ export default function AccountPage() {
   const [lang, setLang] = useState('en');
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [mounted, setMounted] = useState(false);
   
   // Modal States
   const [modal, setModal] = useState(null); // 'email', 'password', 'delete'
@@ -125,7 +124,6 @@ export default function AccountPage() {
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     let isMounted = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {

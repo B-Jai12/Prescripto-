@@ -1,40 +1,52 @@
 import os
-import base64
-from groq import Groq
-from dotenv import load_dotenv
-
-load_dotenv()
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
-# Create a dummy image
-from PIL import Image
 import io
-img = Image.new('RGB', (100, 100), color = 'red')
-img_bytes = io.BytesIO()
-img.save(img_bytes, format='JPEG')
-base64_image = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
+from pathlib import Path
+from PIL import Image
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+backend_dir = Path(__file__).resolve().parent
+load_dotenv(backend_dir / ".env")
+load_dotenv()
+
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    print("ERROR: GEMINI_API_KEY is not set.")
+    exit(1)
+
+client = genai.Client(api_key=api_key)
+
+# Check if test prescription image exists
+image_path = Path(__file__).resolve().parent.parent / "test_prescription.png"
+if image_path.exists():
+    with open(image_path, "rb") as f:
+        img_bytes = f.read()
+    mime_type = "image/png"
+    print(f"Reading real test prescription from: {image_path.name}")
+else:
+    # Create test dummy image in-memory
+    img = Image.new('RGB', (100, 100), color='red')
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG')
+    img_bytes = buf.getvalue()
+    mime_type = "image/jpeg"
+    print("Reading generated test image")
 
 try:
-    response = client.chat.completions.create(
-        model="llama-3.2-90b-vision-preview",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "What is in this image? Return JSON { 'color': '...' }"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    },
-                ],
-            }
+    image_part = types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            "Extract any text or doctor medicine notes you see in this image. Return short JSON.",
+            image_part
         ],
-        temperature=0,
-        response_format={"type": "json_object"}
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.0
+        )
     )
-    print("SUCCESS")
-    print(response.choices[0].message.content)
+    print("SUCCESS: Multimodal Vision API is working properly!")
+    print(response.text.strip())
 except Exception as e:
     print("ERROR:", e)

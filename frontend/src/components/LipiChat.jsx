@@ -9,9 +9,11 @@ export default function LipiChat({ prescriptionData }) {
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef(null);
 
+  const patientDisplayName = prescriptionData?.patient?.name || prescriptionData?.patient_details?.name;
+
   const translations = {
     English: {
-      title: 'Chat with us', status: 'Replying in under 1 min', welcome: `Hello! I'm Lipi. I've analyzed your prescription for ${prescriptionData?.patient_details?.name || 'this patient'}. How can I assist you today?`,
+      title: 'Chat with us', status: 'Replying in under 1 min', welcome: `Hello! I'm Lipi. I've analyzed your prescription ${patientDisplayName ? `for ${patientDisplayName}` : ''}. How can I assist you today?`,
       lipiSays: 'Lipi says', preview: "Hi! I've reviewed your results. Any questions?",
       chips: [
         { label: '💊 Explain Medicines', text: 'Please provide a detailed breakdown of all medicines in my prescription.' },
@@ -23,7 +25,7 @@ export default function LipiChat({ prescriptionData }) {
       ]
     },
     Hindi: {
-      title: 'हमसे चैट करें', status: '1 मिनट से कम में जवाब', welcome: `नमस्ते! मैं लिपि हूँ। मैंने ${prescriptionData?.patient_details?.name || 'मरीज'} के पर्चे का विश्लेषण किया है। मैं आपकी कैसे मदद कर सकती हूँ?`,
+      title: 'हमसे चैट करें', status: '1 मिनट से कम में जवाब', welcome: `नमस्ते! मैं लिपि हूँ। मैंने ${patientDisplayName ? `${patientDisplayName} के` : 'आपके'} पर्चे का विश्लेषण किया है। मैं आपकी कैसे मदद कर सकती हूँ?`,
       lipiSays: 'लिपि का संदेश', preview: 'नमस्ते! मैंने आपके परिणाम देख लिए हैं। कोई सवाल?',
       chips: [
         { label: '💊 दवाएं समझाएं', text: 'कृपया मेरे पर्चे की सभी दवाओं का विस्तृत विवरण दें।' },
@@ -35,7 +37,7 @@ export default function LipiChat({ prescriptionData }) {
       ]
     },
     Telugu: {
-      title: 'మాతో చాట్ చేయండి', status: '1 నిమిషంలోపు సమాధానం', welcome: `నమస్కారం! నేను లిపిని. నేను ${prescriptionData?.patient_details?.name || 'రోగి'} యొక్క ప్రిస్క్రిప్షన్‌ను విశ్లేషించాను. ఈరోజు నేను మీకు ఎలా సహాయపడగలను?`,
+      title: 'మాతో చాట్ చేయండి', status: '1 నిమిషంలోపు సమాధానం', welcome: `నమస్కారం! నేను లిపిని. నేను ${patientDisplayName ? `${patientDisplayName} యొక్క` : 'మీ'} ప్రిస్క్రిప్షన్‌ను విశ్లేషించాను. ఈరోజు నేను మీకు ఎలా సహాయపడగలను?`,
       lipiSays: 'లిపి చెబుతోంది', preview: 'నమస్కారం! నేను మీ ఫలితాలను సమీక్షించాను. ఏవైనా ప్రశ్నలు ఉన్నాయా?',
       chips: [
         { label: '💊 మందుల గురించి వివరించండి', text: 'దయచేసి నా ప్రిస్క్రిప్షన్‌లోని అన్ని మందుల వివరాలను అందించండి.' },
@@ -67,13 +69,30 @@ export default function LipiChat({ prescriptionData }) {
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setIsTyping(true);
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiBaseUrl}/chat`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, context: prescriptionData, language })
-      });
+      const configuredUrl = process.env.NEXT_PUBLIC_API_URL;
+      let response = null;
+
+      if (configuredUrl) {
+        try {
+          const res = await fetch(`${configuredUrl}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, context: prescriptionData, language })
+          });
+          if (res.ok) response = res;
+        } catch (_) {}
+      }
+
+      if (!response) {
+        response = await fetch(`/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, context: prescriptionData, language })
+        });
+      }
+
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'nurse', content: data.response }]);
+      setMessages(prev => [...prev, { role: 'nurse', content: data.response || "I received your message." }]);
     } catch (error) {
       setMessages(prev => [...prev, { role: 'nurse', content: `Error: ${error.message}` }]);
     } finally {

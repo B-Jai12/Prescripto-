@@ -17,6 +17,28 @@ import BrandBadge from '@/components/BrandBadge';
 import { auth, signOut, onAuthStateChanged } from '@/lib/firebase';
 import jsPDF from 'jspdf';
 
+const ScannerLine = () => (
+  <>
+    <style>{`
+      @keyframes scanSweepFinal {
+        0% { top: 0%; }
+        100% { top: 100%; }
+      }
+      .scanner-ray {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: #ffffff;
+        box-shadow: 0 0 15px 5px #FF9FFC, 0 0 40px 15px rgba(168, 85, 247, 0.8), 0 0 60px 20px rgba(255,159,252,0.6);
+        z-index: 10;
+        animation: scanSweepFinal 5s linear infinite;
+      }
+    `}</style>
+    <div className="scanner-ray" />
+  </>
+);
+
 export default function AppMainPage() {
   const [view, setView] = useState('upload');
   const [activeTab, setActiveTab] = useState('overview');
@@ -166,13 +188,38 @@ export default function AppMainPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiBaseUrl}/parse-prescription?languages=en,te,hi`, {
-        method: 'POST',
-        body: formData,
-      });
+      const configuredUrl = process.env.NEXT_PUBLIC_API_URL;
+      let response = null;
 
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      if (configuredUrl) {
+        try {
+          const res = await fetch(`${configuredUrl}/parse-prescription?languages=en,te,hi`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (res.ok) {
+            response = res;
+          }
+        } catch (backendErr) {
+          console.warn('Dedicated backend unreachable, falling back to Next.js API route...', backendErr);
+        }
+      }
+
+      if (!response) {
+        response = await fetch(`/api/parse-prescription?languages=en,te,hi`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
+
+      if (!response.ok) {
+        let errMsg = `Server error (${response.status})`;
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errMsg;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
 
       // Step 2 – OCR done
       setAnalysisStep(2);
@@ -241,6 +288,24 @@ export default function AppMainPage() {
 
       setResultData(mapped);
       setView('result');
+
+      // Save to client-side prescription history
+      try {
+        const historyItem = {
+          id: 'rx_' + Date.now(),
+          timestamp: new Date().toISOString(),
+          fileName: file?.name || 'Prescription',
+          data: backendData,
+          patientName: mapped.patient.name,
+          medicinesCount: meds.length
+        };
+        const existingRaw = localStorage.getItem('lipirx_prescription_history');
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
+        existing.unshift(historyItem);
+        localStorage.setItem('lipirx_prescription_history', JSON.stringify(existing.slice(0, 20)));
+      } catch (historyErr) {
+        console.warn('Could not cache prescription history:', historyErr);
+      }
     } catch (err) {
       console.error('Analysis failed:', err);
       alert(`Analysis failed: ${err.message}\n\nThe AI analysis server may be starting up (this can take up to 60 seconds on the first request). Please wait a moment and try again.`);
@@ -255,28 +320,6 @@ export default function AppMainPage() {
     "Cross-referencing medical database...",
     "Generating safety & wellness report..."
   ];
-
-  const ScannerLine = () => (
-    <>
-      <style>{`
-        @keyframes scanSweepFinal {
-          0% { top: 0%; }
-          100% { top: 100%; }
-        }
-        .scanner-ray {
-          position: absolute;
-          left: 0;
-          right: 0;
-          height: 4px;
-          background: #ffffff;
-          box-shadow: 0 0 15px 5px #FF9FFC, 0 0 40px 15px rgba(168, 85, 247, 0.8), 0 0 60px 20px rgba(255,159,252,0.6);
-          z-index: 10;
-          animation: scanSweepFinal 5s linear infinite;
-        }
-      `}</style>
-      <div className="scanner-ray" />
-    </>
-  );
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
@@ -862,9 +905,9 @@ export default function AppMainPage() {
                     </div>
                   </div>
 
-                  {/* Wellness Score Sidebar Component */}
+                  {/* Extraction Confidence Sidebar Component */}
                   <div style={{ background: 'rgba(255,159,252,0.05)', borderRadius: 32, padding: 32, border: '1px solid rgba(255,159,252,0.1)' }}>
-                    <div style={{ color: '#FF9FFC', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>WELLNESS SCORE</div>
+                    <div style={{ color: '#FF9FFC', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>EXTRACTION CONFIDENCE</div>
                     <div style={{ fontSize: 64, fontWeight: 900 }}>
                       {Math.round((resultData?.patient?.confidence ?? 0) * 100)}
                       <span style={{ fontSize: 20, opacity: 0.3 }}>/100</span>

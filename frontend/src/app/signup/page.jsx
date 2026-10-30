@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import Link from 'next/link';
 import BorderGlow from '../../components/BorderGlow';
 import DecryptedText from '../../components/DecryptedText';
 import GridScan from '../../components/GridScan';
@@ -105,7 +106,7 @@ export default function SignupPage() {
       </div>
 
       {/* Back to home */}
-      <a href="/" style={{
+      <Link href="/" style={{
         position: 'absolute', top: 32, left: 32,
         display: 'flex', alignItems: 'center', gap: 8,
         fontSize: 14, color: 'rgba(255,255,255,0.45)',
@@ -115,7 +116,7 @@ export default function SignupPage() {
         onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
       >
         <span style={{ fontSize: 18, lineHeight: 1 }}>←</span> Back
-      </a>
+      </Link>
 
       {/* Card */}
       <motion.div
@@ -130,7 +131,7 @@ export default function SignupPage() {
           animated={true} colors={['#FF9FFC', '#c084fc', '#38bdf8']}
         >
           <div style={{ padding: '48px 40px', backdropFilter: 'blur(16px) saturate(180%)' }}>
-            <a href="/" style={{
+            <Link href="/" style={{
               display: 'inline-flex', alignItems: 'center',
               textDecoration: 'none', marginBottom: 40,
             }}>
@@ -144,7 +145,7 @@ export default function SignupPage() {
               }}>
                 LipiRx
               </span>
-            </a>
+            </Link>
 
             <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', color: '#ffffff', marginBottom: 12 }}>
               <DecryptedText text="Create account" animateOn="view" speed={60} />

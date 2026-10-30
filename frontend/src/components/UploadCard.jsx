@@ -142,6 +142,7 @@ export default function UploadCard({ onFileSelect, selectedFile, onClear, isAnal
         )}
 
         <input
+          id="prescription-file-input"
           ref={inputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,image/heif"

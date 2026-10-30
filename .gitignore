@@ -12,6 +12,9 @@ build/
 venv/
 .venv/
 .venv-1/
+backend/venv/
+backend/venv_new/
+*venv*/
 env/
 ENV/
 
