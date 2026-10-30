@@ -11,3 +11,4 @@ export async function GET() {
     models: ['gemini-2.5-flash', 'groq-gpt-oss-120b']
   });
 }
+

@@ -18,17 +18,21 @@ Prescripto is a full-stack, AI-powered healthcare platform that turns doctor han
 
 ---
 
-## 🚀 Live Deployment to Vercel (1-Click)
+## 🚀 Live Deployment to Vercel
 
 Prescripto is built to deploy seamlessly to [Vercel](https://vercel.com):
 
-1. **Push or Import Repository**: Import this GitHub repository (`Prescripto-`) on Vercel.
-2. **Environment Variables**: Add the following in your Vercel Project Settings (`Environment Variables`):
+1. **Import Repository**: Import your GitHub repository (`Prescripto-`) on [Vercel](https://vercel.com/new).
+2. **Configure Root Directory (Crucial)**:
+   - In the project configuration (or **Settings** > **General** > **Root Directory** if already imported):
+   - Set **Root Directory** to `frontend` and click **Save**.
+   - *(Vercel will automatically detect Next.js with zero configuration needed).*
+3. **Environment Variables**: Add the following under **Project Settings** > **Environment Variables**:
    ```ini
-   GEMINI_API_KEY=AIzaSy...your_gemini_api_key...
-   GROQ_API_KEY=gsk_...your_groq_api_key...
+   GEMINI_API_KEY=your_gemini_api_key_here
+   GROQ_API_KEY=your_groq_api_key_here
    ```
-3. **Deploy**: Click **Deploy**. Vercel will build and launch the Next.js application with full serverless prescription extraction and conversational AI capabilities out of the box!
+4. **Deploy / Redeploy**: Click **Deploy** (or **Redeploy** without build cache). Vercel builds the Next.js application with full serverless prescription extraction (`/api/parse-prescription`), conversational AI (`/api/chat`), and health check (`/api/health`) out of the box!
 
 ---
 
@@ -94,8 +98,7 @@ Prescripto-/
 │   │   ├── components/                         # UI cards, camera upload, interactive chat
 │   │   └── lib/firebase.js                     # Firebase auth & mock fallback
 │   ├── next.config.ts                          # Next.js config & API rewrites
-│   ├── package.json                            # Frontend dependencies & scripts
-│   └── vercel.json                             # Vercel deployment configuration
+│   └── package.json                            # Frontend dependencies & scripts
 ├── backend/
 │   ├── services/
 │   │   ├── nlp.py                              # Gemini 2.5 Flash extraction & fallback chain
@@ -106,8 +109,6 @@ Prescripto-/
 │   ├── main.py                                 # FastAPI application
 │   ├── requirements.txt                        # Backend dependencies
 │   └── test_vision.py                          # Vision extraction test script
-├── vercel.json                                 # Root Vercel build configuration
-├── package.json                                # Root workspace helper
 ├── test_prescription.png                       # Sample medical prescription image
 └── README.md
 ```
@@ -116,3 +117,4 @@ Prescripto-/
 
 ## 📄 License
 MIT License. Created by [Jaideep Botla](https://github.com/B-Jai12).
+
