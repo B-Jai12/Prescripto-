@@ -29,6 +29,10 @@ log.txt
 
 # ── Node / Frontend ───────────────────────────────
 node_modules/
+.next/
+out/
+.turbo/
+next-env.d.ts
 frontend/node_modules/
 frontend/.next/
 frontend/out/
